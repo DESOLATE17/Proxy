@@ -1,0 +1,43 @@
+version: "3.8"
+services:
+  proxy:
+    env_file:
+      - .env
+    container_name: proxy
+    depends_on:
+      postgres:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+    restart: always
+
+  api:
+    env_file:
+      - .env
+    container_name: api
+    depends_on:
+      nats:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+    restart: always
+
+  postgres:
+    env_file:
+      - .env
+    image: postgres:14
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/initdb.sql
+    restart: always

@@ -23,6 +23,7 @@ func (ps *ProxyImpl) ListenAndServe() error {
 }
 
 func (ps *ProxyImpl) proxyHTTP(w http.ResponseWriter, r *http.Request) {
+	r.RequestURI = ""
 	r.Header.Del("Proxy-Connection")
 
 	resp, err := http.DefaultTransport.RoundTrip(r)
@@ -31,7 +32,7 @@ func (ps *ProxyImpl) proxyHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-
+	// Cookies parses and returns the cookies set in the Set-Cookie headers
 	resp.Cookies()
 	for key, values := range resp.Header {
 		for _, value := range values {

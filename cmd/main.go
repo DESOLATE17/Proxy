@@ -4,10 +4,10 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"path/filepath"
-	"proxy/Proxy/internal/pkg/api/handler"
-	"proxy/Proxy/internal/pkg/api/repo"
-	"proxy/Proxy/internal/pkg/api/usecase"
-	"proxy/Proxy/internal/pkg/proxy"
+	"proxy/internal/pkg/api/handler"
+	"proxy/internal/pkg/api/repo"
+	"proxy/internal/pkg/api/usecase"
+	"proxy/internal/pkg/proxy"
 	"strings"
 )
 

@@ -1,7 +1,7 @@
 package usecase
 
 import (
-	"proxy/Proxy/internal/pkg/api"
+	"proxy/internal/pkg/api"
 )
 
 type Usecase struct {

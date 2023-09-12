@@ -2,7 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"proxy/Proxy/internal/pkg/api"
+	"proxy/internal/pkg/api"
 )
 
 type Handler struct {

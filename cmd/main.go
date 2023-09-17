@@ -13,7 +13,7 @@ import (
 
 func main() {
 	vp := viper.New()
-	if err := initConfig(vp, "config.yml"); err != nil {
+	if err := initConfig(vp, "/configs/config.yml"); err != nil {
 		log.Printf("error initializing configs: %s\n", err.Error())
 	}
 
@@ -32,7 +32,8 @@ func main() {
 	handlers := handler.NewHandler(services)
 
 	router := handlers.SetupRoutes()
-	router.Run("127.0.0.1:8000")
+	//router := gin.New()
+	router.Run("0.0.0.0:8000")
 }
 
 func initConfig(vp *viper.Viper, configPath string) error {

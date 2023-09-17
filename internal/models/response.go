@@ -9,3 +9,5 @@ type Response struct {
 	Header    map[string]string `json:"header"`
 	Body      string            `json:"body"`
 }
+
+const ConnectionEstablished = "HTTP/1.1 200 Connection established\r\n\r\n"

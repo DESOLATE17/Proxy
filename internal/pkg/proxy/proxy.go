@@ -13,15 +13,17 @@ import (
 	"net/http/httputil"
 	"os/exec"
 	"proxy/internal/models"
+	"proxy/internal/pkg/api"
 	"strconv"
 	"strings"
 )
 
 type ProxyImpl struct {
+	uc api.Usecase
 }
 
-func NewProxyServer() *ProxyImpl {
-	return &ProxyImpl{}
+func NewProxyServer(uc api.Usecase) *ProxyImpl {
+	return &ProxyImpl{uc: uc}
 }
 
 func (ps *ProxyImpl) ListenAndServe() error {
@@ -113,23 +115,26 @@ func (ps *ProxyImpl) proxyHTTPS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	request.URL.Scheme = "https"
 
-	//request.URL.Scheme = "https"
-	//hostAndPort := strings.Split(r.URL.Host, ":")
-	//request.URL.Host = hostAndPort[0]
+	reqId, err := ps.uc.SaveRequest(request)
+	if err != nil {
+		log.Printf("Error save:  %v", err)
+	}
 
-	//reqId, err := p.repo.SaveRequest(request)
-	//if err != nil {
-	//	log.Printf("Error save:  %v", err)
-	//}
-	//
-	//_, err = p.repo.SaveResponse(reqId, response)
-	//if err != nil {
-	//	log.Printf("Error save:  %v", err)
-	//}
+	_, err = ps.uc.SaveResponse(reqId, response)
+	if err != nil {
+		log.Printf("Error save:  %v", err)
+	}
 }
 
 func (ps *ProxyImpl) proxyHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.Scheme = "http"
+	reqId, err := ps.uc.SaveRequest(r)
+	if err != nil {
+		log.Printf("Error save:  %v", err)
+	}
+
 	r.RequestURI = strings.Replace(r.RequestURI, r.URL.Scheme+"://"+r.URL.Host, "", 1)
 	r.Header.Del("Proxy-Connection")
 
@@ -152,6 +157,11 @@ func (ps *ProxyImpl) proxyHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	_, err = ps.uc.SaveResponse(reqId, resp)
+	if err != nil {
+		log.Printf("Error save:  %v", err)
 	}
 }
 

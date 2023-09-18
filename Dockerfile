@@ -7,5 +7,4 @@ FROM ubuntu:23.04 as run_stage
 RUN apt-get -y update && apt-get install -y tzdata -y ca-certificates && update-ca-certificates
 WORKDIR /out
 COPY --from=builder /app/proxy ./binary
-EXPOSE 8000
 CMD ["./binary"]

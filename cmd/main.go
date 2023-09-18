@@ -17,11 +17,6 @@ func main() {
 		log.Printf("error initializing configs: %s\n", err.Error())
 	}
 
-	proxy := proxy.NewProxyServer()
-	go func() {
-		log.Fatal(proxy.ListenAndServe())
-	}()
-
 	db, err := repo.NewPostgresDB(vp.GetString("db.connection_string"))
 	if err != nil {
 		log.Fatal("error during connecting to postgres ", err)
@@ -31,8 +26,12 @@ func main() {
 	services := usecase.NewUsecase(repos)
 	handlers := handler.NewHandler(services)
 
+	proxy := proxy.NewProxyServer(services)
+	go func() {
+		log.Fatal(proxy.ListenAndServe())
+	}()
+
 	router := handlers.SetupRoutes()
-	//router := gin.New()
 	router.Run("0.0.0.0:8000")
 }
 

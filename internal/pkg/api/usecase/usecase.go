@@ -218,6 +218,58 @@ func (u *Usecase) Scan(id int) (string, error) {
 		return "", err
 	}
 
+	message, err := checkGetParams(req, response)
+	if err != nil || message != "" {
+		return message, err
+	}
+
+	if req.Method == "POST" {
+		message, err = checkPostParams(req, response)
+		if err != nil || message != "" {
+			return message, err
+		}
+	}
+
+	message, err = checkCookie(req, response)
+	if err != nil || message != "" {
+		return message, err
+	}
+
+	return checkHeaders(req, response)
+}
+
+func checkCookie(req *http.Request, response models.Response) (string, error) {
+	cookies := req.Cookies()
+	for i, cookie := range cookies {
+		newCookie := &http.Cookie{
+			Name:     cookie.Name,
+			Path:     cookie.Path,
+			Domain:   cookie.Domain,
+			MaxAge:   cookie.MaxAge,
+			Secure:   cookie.Secure,
+			HttpOnly: cookie.HttpOnly,
+			SameSite: cookie.SameSite,
+		}
+
+		newCookie.Value = `"`
+		cookies[i] = newCookie
+		req.Header.Set("Cookie", cookiesToString(cookies))
+		message, err := checkVulnerability(req, response)
+		if err != nil || message != "" {
+			return message + "Cookie " + cookie.Name, err
+		}
+
+		cookies[i].Value = `'`
+		req.Header.Set("Cookie", cookiesToString(cookies))
+		message, err = checkVulnerability(req, response)
+		if err != nil || message != "" {
+			return message + "Cookie " + cookie.Name, err
+		}
+	}
+	return "", nil
+}
+
+func checkGetParams(req *http.Request, response models.Response) (string, error) {
 	// change GET params
 	parsedURL, err := url.Parse(req.URL.String())
 	if err != nil {
@@ -250,56 +302,10 @@ func (u *Usecase) Scan(id int) (string, error) {
 			req.URL = parsedURL
 		}
 	}
+	return "", nil
+}
 
-	//change POST params
-	if req.Method == "POST" {
-		for key, values := range req.PostForm {
-			for i, val := range values {
-				req.PostForm[key][i] = `'`
-				message, err := checkVulnerability(req, response)
-				if err != nil || message != "" {
-					return message + "PostParam " + key, err
-				}
-
-				req.PostForm[key][i] = `"`
-				message, err = checkVulnerability(req, response)
-				if err != nil || message != "" {
-					return message + "PostParam " + key, err
-				}
-
-				req.PostForm[key][i] = val
-			}
-		}
-	}
-
-	cookies := req.Cookies()
-	for i, cookie := range cookies {
-		newCookie := &http.Cookie{
-			Name:     cookie.Name,
-			Path:     cookie.Path,
-			Domain:   cookie.Domain,
-			MaxAge:   cookie.MaxAge,
-			Secure:   cookie.Secure,
-			HttpOnly: cookie.HttpOnly,
-			SameSite: cookie.SameSite,
-		}
-
-		newCookie.Value = `"`
-		cookies[i] = newCookie
-		req.Header.Set("Cookie", cookiesToString(cookies))
-		message, err := checkVulnerability(req, response)
-		if err != nil || message != "" {
-			return message + "Cookie " + cookie.Name, err
-		}
-
-		cookies[i].Value = `'`
-		req.Header.Set("Cookie", cookiesToString(cookies))
-		message, err = checkVulnerability(req, response)
-		if err != nil || message != "" {
-			return message + "Cookie " + cookie.Name, err
-		}
-	}
-
+func checkHeaders(req *http.Request, response models.Response) (string, error) {
 	// change HTTP headers
 	for key, values := range req.Header {
 		for i, value := range values {
@@ -316,6 +322,27 @@ func (u *Usecase) Scan(id int) (string, error) {
 			}
 
 			req.Header[key][i] = value
+		}
+	}
+	return "", nil
+}
+
+func checkPostParams(req *http.Request, response models.Response) (string, error) {
+	for key, values := range req.PostForm {
+		for i, val := range values {
+			req.PostForm[key][i] = `'`
+			message, err := checkVulnerability(req, response)
+			if err != nil || message != "" {
+				return message + "PostParam " + key, err
+			}
+
+			req.PostForm[key][i] = `"`
+			message, err = checkVulnerability(req, response)
+			if err != nil || message != "" {
+				return message + "PostParam " + key, err
+			}
+
+			req.PostForm[key][i] = val
 		}
 	}
 	return "", nil

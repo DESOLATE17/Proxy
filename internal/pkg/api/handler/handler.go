@@ -30,12 +30,29 @@ func (handler *Handler) SetupRoutes() *gin.Engine {
 	return router
 }
 
-func newErrorResponse(c *gin.Context, statusCode int, details string) {
-	c.AbortWithStatusJSON(statusCode, details)
-}
-
 func (handler *Handler) Scan(c *gin.Context) {
+	idStr := c.Param("id")
+	if idStr == "" {
+		c.AbortWithStatusJSON(http.StatusNotFound, "no such request")
+		return
+	}
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
 
+	message, err := handler.usecase.Scan(id)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if message == "" {
+		c.JSON(http.StatusOK, "no sql injections found")
+		return
+	}
+	c.JSON(http.StatusOK, message)
 }
 
 // AllRequests /requests

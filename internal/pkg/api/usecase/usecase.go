@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"proxy/internal/models"
 	"proxy/internal/pkg/api"
 	"strings"
@@ -45,10 +46,11 @@ func (u *Usecase) SaveRequest(request *http.Request) (int, error) {
 
 func (u *Usecase) SaveResponse(requestId int, response *http.Response) (models.Response, error) {
 	var responseParsed = models.Response{
-		RequestId: requestId,
-		Code:      response.StatusCode,
-		Cookies:   u.getCookies(response.Cookies()),
-		Headers:   u.getHeaders(response.Header),
+		RequestId:     requestId,
+		ContentLength: response.ContentLength,
+		Code:          response.StatusCode,
+		Cookies:       u.getCookies(response.Cookies()),
+		Headers:       u.getHeaders(response.Header),
 	}
 
 	bodyBytes, err := io.ReadAll(response.Body)
@@ -197,4 +199,185 @@ func (u *Usecase) RepeatRequest(id int) (models.Response, error) {
 	}
 
 	return res, nil
+}
+
+func (u *Usecase) Scan(id int) (string, error) {
+	request, err := u.GetRequest(id)
+	if err != nil {
+		return "", err
+	}
+
+	response, err := u.RepeatRequest(id)
+	if err != nil {
+		return "", err
+	}
+
+	// convert it back to http request
+	req, err := u.ConvertModelToRequest(request)
+	if err != nil {
+		return "", err
+	}
+
+	// change GET params
+	parsedURL, err := url.Parse(req.URL.String())
+	if err != nil {
+		return "", err
+	}
+
+	query := parsedURL.Query()
+	for key, values := range query {
+		for _, value := range values {
+			query.Set(key, `'`)
+			parsedURL.RawQuery = query.Encode()
+			req.URL = parsedURL
+
+			message, err := checkVulnerability(req, response)
+			if err != nil || message != "" {
+				return message + "GetParam " + key, err
+			}
+
+			query.Set(key, `"`)
+			parsedURL.RawQuery = query.Encode()
+			req.URL = parsedURL
+
+			message, err = checkVulnerability(req, response)
+			if err != nil || message != "" {
+				return message + "GetParam " + key, err
+			}
+
+			query.Set(key, value)
+			parsedURL.RawQuery = query.Encode()
+			req.URL = parsedURL
+		}
+	}
+
+	//change POST params
+	if req.Method == "POST" {
+		for key, values := range req.PostForm {
+			for i, val := range values {
+				req.PostForm[key][i] = `'`
+				message, err := checkVulnerability(req, response)
+				if err != nil || message != "" {
+					return message + "PostParam " + key, err
+				}
+
+				req.PostForm[key][i] = `"`
+				message, err = checkVulnerability(req, response)
+				if err != nil || message != "" {
+					return message + "PostParam " + key, err
+				}
+
+				req.PostForm[key][i] = val
+			}
+		}
+	}
+
+	cookies := req.Cookies()
+	for i, cookie := range cookies {
+		newCookie := &http.Cookie{
+			Name:     cookie.Name,
+			Path:     cookie.Path,
+			Domain:   cookie.Domain,
+			MaxAge:   cookie.MaxAge,
+			Secure:   cookie.Secure,
+			HttpOnly: cookie.HttpOnly,
+			SameSite: cookie.SameSite,
+		}
+
+		newCookie.Value = `"`
+		cookies[i] = newCookie
+		req.Header.Set("Cookie", cookiesToString(cookies))
+		message, err := checkVulnerability(req, response)
+		if err != nil || message != "" {
+			return message + "Cookie " + cookie.Name, err
+		}
+
+		cookies[i].Value = `'`
+		req.Header.Set("Cookie", cookiesToString(cookies))
+		message, err = checkVulnerability(req, response)
+		if err != nil || message != "" {
+			return message + "Cookie " + cookie.Name, err
+		}
+	}
+
+	// change HTTP headers
+	for key, values := range req.Header {
+		for i, value := range values {
+			req.Header[key][i] = `'`
+			message, err := checkVulnerability(req, response)
+			if err != nil || message != "" {
+				return message + "Header " + key, err
+			}
+
+			req.Header[key][i] = `"`
+			message, err = checkVulnerability(req, response)
+			if err != nil || message != "" {
+				return message + "Header " + key, err
+			}
+
+			req.Header[key][i] = value
+		}
+	}
+	return "", nil
+}
+
+func cookiesToString(cookies []*http.Cookie) string {
+	var str string
+	for _, cookie := range cookies {
+		str += cookie.String() + "; "
+	}
+	return strings.TrimRight(str, "; ")
+}
+
+func checkVulnerability(req *http.Request, expectedResponse models.Response) (string, error) {
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Ошибка при отправке запроса:", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != expectedResponse.Code || resp.ContentLength != expectedResponse.ContentLength {
+		return "Уязвимый параметр:", nil
+	}
+	return "", nil
+}
+
+func (u *Usecase) ConvertModelToRequest(request models.Request) (*http.Request, error) {
+	httpRequest, err := http.NewRequest(request.Method, request.Scheme+"://"+request.Host+request.Path, strings.NewReader(request.Body))
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	for key, value := range u.convertStringToHeaders(request.Headers) {
+		httpRequest.Header.Set(key, value)
+	}
+
+	// Set cookies
+	for _, cookie := range request.Cookies {
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  cookie.Key,
+			Value: cookie.Value,
+		})
+	}
+
+	// Set GET parameters
+	queryParams := make(url.Values)
+	for _, value := range request.GetParams {
+		queryParams.Add(value.Key, value.Value)
+	}
+	httpRequest.URL.RawQuery = queryParams.Encode()
+
+	// Set POST parameters
+	if request.Method == "POST" && len(request.PostParams) > 0 {
+		formData := make(url.Values)
+		for _, param := range request.PostParams {
+			formData.Add(param.Key, param.Value)
+		}
+		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		httpRequest.Body = io.NopCloser(strings.NewReader(formData.Encode()))
+	}
+	return httpRequest, nil
 }

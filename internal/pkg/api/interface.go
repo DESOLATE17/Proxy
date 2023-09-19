@@ -18,4 +18,5 @@ type Usecase interface {
 	AllRequests() ([]models.Request, error)
 	GetRequest(id int) (models.Request, error)
 	RepeatRequest(id int) (models.Response, error)
+	Scan(id int) (string, error)
 }
